@@ -1,13 +1,12 @@
-Deno.serve({
-    onListen: ({ port }) => {
-        console.log("Deno server listening on *:", port);
-    },
-}, async (req: Request, conn: Deno.ServeHandlerInfo) => {
+Deno.serve(async (req: Request) => {
     // Get information about the incoming request
-    const text = await req.text()
-    const ip = conn.remoteAddr.hostname;
-    console.log(`${ip} just made an HTTP request with the text: ${text}`);
+    const url = new URL(req.url);
+    if (url.pathname === '/webhook') {
+        const text = await req.text()
+        console.log('Webhook Infos:', text)
+        return new Response(`ok`);
+    }
 
-    // Return a web standard Response object
-    return new Response("Hello, world!");
+    console.log('Call url default text')
+    return new Response(`There is nothing to see here, please move on`);
 });
