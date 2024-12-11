@@ -1,1 +1,5 @@
-console.log("Hello, World!");
+export default {
+    fetch(request: Request): Response {
+        return new Response("Hello, world!");
+    },
+};
