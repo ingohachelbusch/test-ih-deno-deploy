@@ -2,7 +2,6 @@
 import type { MergeRequestAttributes, MergeRequestEvent } from "./gitlabHooks.d.ts"
 import type { PullRequest, PullRequestDraft } from "./githubTypes.d.ts"
 
-// TODO add linting
 function extractJiraTicketFromMRTitle(title: string): string | null {
     const regex = /.*:.*\(([a-zA-Z]+-[0-9]+)\)/g
     return Array.from(title.matchAll(regex), m => m[1])?.[0] ?? null
@@ -31,11 +30,11 @@ function getGitHubRepoName(mergeRequest: MergeRequestEvent) : string {
     return gitLabRepoName
 }
 
+// TODO determine why github returns a 404
 async function checkIfGithubPullRequestExists(token: string, owner: string, mergeRequest: MergeRequestEvent): Promise<boolean | undefined> {
     // change match by cases, where the mirrored name differs
     const repo = getGitHubRepoName(mergeRequest)
     const title = mergeRequest.object_attributes.title
-    console.log('token-length:', token.length)
     console.log('url:', `https://api.github.com/repos/${owner}/${repo}/pulls`)
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
@@ -49,10 +48,14 @@ async function checkIfGithubPullRequestExists(token: string, owner: string, merg
 
         console.log('PR List status code:', response.status)
         if (response.status !== 200 && response.status !== 304) {
+            console.log('Error response:', await response.json())
             return undefined
         }
 
         const pullRequests = await response.json()
+        console.log('Pull requests:', pullRequests)
+        console.log('Commits:', pullRequests?.last_commit, pullRequests?.commits)
+        // TODO use last commit id instead
         const matchingPullRequest = pullRequests.find((pullRequest: PullRequest) => {
             pullRequest.title = title
         })
@@ -94,7 +97,7 @@ function buildGithubPullRequestPayloadByGitlabMergeRequest(mergeRequestAttribute
 }
 
 function addJiraComment() {
-
+  // TODO implement
 }
 
 async function handleWebhookRequest(request: Request): Promise<Response> {
@@ -137,8 +140,6 @@ async function handleMergeRequest(mergeRequestEvent: MergeRequestEvent): Promise
         }
 
         /* TODOs:
-        * - check if a github MR exists (determined on what information?)
-        * -- if not create one
         * -- determine how to get the deployment url
         * --- if not possible get the MR ID and build the id itself
         * -- write Preview URL + amt-URLs into the JIRA
