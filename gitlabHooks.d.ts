@@ -1,5 +1,4 @@
-
-// Types copied from https://github.com/lawvs/gitlab-event-types/tree/main
+// Most types copied from https://github.com/lawvs/gitlab-event-types/tree/main
 export type LiteralUnion<T extends U, U = string> = T | (U & { _?: never });
 
 export interface Compare<T> {

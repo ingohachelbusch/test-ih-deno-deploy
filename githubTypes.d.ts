@@ -12,3 +12,5 @@ export interface PullRequestDraft {
     maintainer_can_modify?: boolean;
     issue?: number;
 }
+
+export
