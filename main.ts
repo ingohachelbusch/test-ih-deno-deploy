@@ -1,6 +1,5 @@
 // TODO clean up code
 import type { MergeRequestEvent } from "./gitlabHooks.d.ts"
-import { load } from "@std/dotenv";
 
 // TODO make configurable
 
@@ -41,8 +40,7 @@ async function handleWebhookRequest(request: Request): Promise<Response> {
 async function handleMergeRequest(mergeRequestEvent: MergeRequestEvent) {
     if (!mergeRequestEvent.object_attributes?.draft && mergeRequestEvent.object_attributes?.state === 'opened') {
         console.log('Process Merge request!')
-        const env = await load()
-        const githubToken = env['GITHUB_TOKEN']
+        const githubToken = Deno.env.get('GITHUB_TOKEN')
         console.log('token:', githubToken)
 
         const ticketNumber = extractJiraTicketFromMRTitle(mergeRequestEvent.object_attributes.title)
@@ -78,8 +76,7 @@ Deno.serve(async (req: Request) => {
 
     // TODO determine why the code does execute after an error
     console.log('Call url default text!!!')
-    const env = await load()
-    const githubToken = env['GITHUB_TOKEN']
+    const githubToken = Deno.env.get('GITHUB_TOKEN')
     console.log('token:', githubToken)
     return new Response(`There is nothing to see here, please move on`)
 });
