@@ -37,6 +37,7 @@ async function checkIfGithubPullRequestExists(token: string, owner: string, merg
     const title = mergeRequest.object_attributes.title
     console.log('url:', `https://api.github.com/repos/${owner}/${repo}/pulls`)
     try {
+        // TODO add sort parameter
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
             method: 'GET',
             headers: {
@@ -53,9 +54,8 @@ async function checkIfGithubPullRequestExists(token: string, owner: string, merg
         }
 
         const pullRequests = await response.json()
-        console.log('Pull requests:', pullRequests)
-        console.log('Commits:', pullRequests?.last_commit, pullRequests?.commits)
         // TODO use last commit id instead
+        // The commits can be obtained by pullRequests[0]?._links?.commits?.href for each pull request
         const matchingPullRequest = pullRequests.find((pullRequest: PullRequest) => {
             pullRequest.title = title
         })
@@ -100,7 +100,7 @@ function addJiraComment() {
   // TODO implement
 }
 
-async function handleWebhookRequest(request: Request): Promise<Response> {
+async function handleGitlabWebhookRequest(request: Request): Promise<Response> {
     const text = await request.text()
     try {
         const webhookEvent = JSON.parse(text)
@@ -109,6 +109,18 @@ async function handleWebhookRequest(request: Request): Promise<Response> {
         } else {
             console.log(`Unsupported webhook event: ${webhookEvent?.event_type}`)
         }
+    } catch (err) {
+        console.log('Webhook Error:', err)
+        return new Response(`error`, {status: 500, statusText: 'ERROR'})
+    }
+    return new Response(`ok`, {status: 200, statusText: 'OK'})
+}
+
+async function handleGithubWebhookRequest(request: Request): Promise<Response> {
+    const text = await request.text()
+    try {
+        const webhookEvent = JSON.parse(text)
+        console.log('Webhook Github:', webhookEvent)
     } catch (err) {
         console.log('Webhook Error:', err)
         return new Response(`error`, {status: 500, statusText: 'ERROR'})
@@ -154,15 +166,19 @@ async function handleMergeRequest(mergeRequestEvent: MergeRequestEvent): Promise
     return true
 }
 
-Deno.serve(async (req: Request) => {
+Deno.serve(async (request: Request) => {
     // Get information about the incoming request
-    const url = new URL(req.url);
+    const url = new URL(request.url);
     // TODO check if a webhook for closed MRs exists (if not maybe for commit in develop branch), for the clean up
-    if (url.pathname === '/webhook') {
-        return await handleWebhookRequest(req)
+    if (url.pathname === '/gitlab-webhook') {
+        return await handleGitlabWebhookRequest(request)
+    }
+
+    if (url.pathname === '/github-webhook') {
+        return handleGithubWebhookRequest(request)
     }
 
     // TODO determine why the code does execute after an error
     console.log('Call url default text!!!')
     return new Response(`There is nothing to see here, please move on`)
-});
+})
