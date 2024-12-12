@@ -8,8 +8,32 @@ function extractJiraTicketFromMRTitle(title: string): string | null {
     return Array.from(title.matchAll(regex), m => m[1])?.[0] ?? null
 }
 
+function getEnvMapping(envVariableName: string) : Map<string, string> {
+    const keyValueMap = new Map<string, string>();
+    const keyValueMappings = Deno.env.get(envVariableName)
+    if(keyValueMappings) {
+        keyValueMappings.split(';').forEach((keyValue) => {
+            const keyValueArray = keyValue.split('=')
+            if(keyValueArray.length === 2) {
+                keyValueMap.set(keyValueArray[0], keyValueArray[1])
+            }
+        })
+    }
+    return keyValueMap
+}
+
+function getGitHubRepoName(mergeRequest: MergeRequestEvent) : string {
+    const gitLabRepoName = mergeRequest.repository.name
+    const repoNameMapping = getEnvMapping('GITLAB_TO_GITHUB_MAPPING');
+    if (repoNameMapping.has(gitLabRepoName)) {
+        return repoNameMapping.get(gitLabRepoName)!
+    }
+    return gitLabRepoName
+}
+
 async function checkIfGithubPullRequestExists(token: string, owner: string, mergeRequest: MergeRequestEvent): Promise<boolean | undefined> {
-    const repo = mergeRequest.repository.name
+    // change match by cases, where the mirrored name differs
+    const repo = getGitHubRepoName(mergeRequest)
     const title = mergeRequest.object_attributes.title
     console.log('token-length:', token.length)
     console.log('url:', `https://api.github.com/repos/${owner}/${repo}/pulls`)
@@ -40,7 +64,7 @@ async function checkIfGithubPullRequestExists(token: string, owner: string, merg
 }
 
 async function createGithubMergeRequest(token: string, owner: string, mergeRequest: MergeRequestEvent) {
-    const repo = mergeRequest.repository.name
+    const repo = getGitHubRepoName(mergeRequest)
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
             method: 'POST',
