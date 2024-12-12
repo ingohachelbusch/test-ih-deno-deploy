@@ -69,6 +69,8 @@ async function checkIfGithubPullRequestExists(token: string, owner: string, merg
 async function createGithubMergeRequest(token: string, owner: string, mergeRequest: MergeRequestEvent) {
     const repo = getGitHubRepoName(mergeRequest)
     try {
+        const body = JSON.stringify(buildGithubPullRequestPayloadByGitlabMergeRequest(mergeRequest.object_attributes))
+        console.log('body', body)
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
             method: 'POST',
             headers: {
@@ -76,7 +78,7 @@ async function createGithubMergeRequest(token: string, owner: string, mergeReque
                 authorization: `Bearer ${token}`,
                 'X-GitHub-Api-Version': '2022-11-28'
             },
-            body: JSON.stringify(buildGithubPullRequestPayloadByGitlabMergeRequest(mergeRequest.object_attributes))
+            body: body
         })
         console.log('PR Create status code:', response.status)
         return response.status === 201
