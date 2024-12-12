@@ -26,7 +26,7 @@ async function handleWebhookRequest(request: Request): Promise<Response> {
         const webhookEvent = JSON.parse(text)
         if (webhookEvent?.event_type === "merge_request") {
             // TODO handle response
-            await handleMergeRequest(webhookEvent as MergeRequestEvent)
+            handleMergeRequest(webhookEvent as MergeRequestEvent)
         } else {
             console.log(`Unsupported webhook event: ${webhookEvent?.event_type}`)
         }
@@ -37,11 +37,10 @@ async function handleWebhookRequest(request: Request): Promise<Response> {
     return new Response(`ok`, {status: 200, statusText: 'OK'})
 }
 
-async function handleMergeRequest(mergeRequestEvent: MergeRequestEvent) {
+function handleMergeRequest(mergeRequestEvent: MergeRequestEvent) {
     if (!mergeRequestEvent.object_attributes?.draft && mergeRequestEvent.object_attributes?.state === 'opened') {
         console.log('Process Merge request!')
         const githubToken = Deno.env.get('GITHUB_TOKEN')
-        console.log('token:', githubToken)
 
         const ticketNumber = extractJiraTicketFromMRTitle(mergeRequestEvent.object_attributes.title)
         if (ticketNumber) {
@@ -76,7 +75,5 @@ Deno.serve(async (req: Request) => {
 
     // TODO determine why the code does execute after an error
     console.log('Call url default text!!!')
-    const githubToken = Deno.env.get('GITHUB_TOKEN')
-    console.log('token:', githubToken)
     return new Response(`There is nothing to see here, please move on`)
 });
