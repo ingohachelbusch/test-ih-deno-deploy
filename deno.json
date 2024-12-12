@@ -1,0 +1,6 @@
+{
+  "module": "es2022",
+  "imports": {
+    "@std/dotenv": "jsr:@std/dotenv@^0.225.3"
+  }
+}
