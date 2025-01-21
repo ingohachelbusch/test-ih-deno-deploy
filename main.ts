@@ -40,37 +40,54 @@ async function checkIfGithubPullRequestExists(
   mergeRequest: MergeRequestEvent,
 ): Promise<boolean | undefined> {
   // change match by cases, where the mirrored name differs
-  const repo = getGitHubRepoName(mergeRequest);
+
   const title = mergeRequest.object_attributes.title;
-  console.log("url:", `https://api.github.com/repos/${owner}/${repo}/pulls`);
+
   try {
-    // TODO add sort parameter
-    const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/pulls`,
-      {
-        method: "GET",
-        headers: getGitHubHeaders(token),
-      },
+    const pullRequests = await getGithubPullRequests(
+      token,
+      owner,
+      mergeRequest,
     );
 
-    if (response.status !== 200 && response.status !== 304) {
-      console.log("Received unexpected response:", response.status);
-      return undefined;
-    }
+    console.log("Pull requests: ", pullRequests.map((pr) => pr.title).join(";"), title);
 
-    const pullRequests = await response.json();
-    // TODO use last commit id instead
+    // TODO use last commit id instead?
     // The commits can be obtained by pullRequests[0]?._links?.commits?.href for each pull request
     const matchingPullRequest = pullRequests.find(
       (pullRequest: PullRequest) => {
-        pullRequest.title = title;
+        return pullRequest.title === title
       },
     );
+    console.log("matchingPullRequest: ", matchingPullRequest);
     return typeof matchingPullRequest !== "undefined";
   } catch (e) {
     console.error("Error by getting all github pull requests:", e);
     return undefined;
   }
+}
+
+async function getGithubPullRequests(
+  token: string,
+  owner: string,
+  mergeRequest: MergeRequestEvent,
+): Promise<PullRequest[]> {
+  // TODO add sort parameter
+  const repo = getGitHubRepoName(mergeRequest);
+  const response = await fetch(
+    `https://api.github.com/repos/${owner}/${repo}/pulls`,
+    {
+      method: "GET",
+      headers: getGitHubHeaders(token),
+    },
+  );
+
+  if (response.status !== 200 && response.status !== 304) {
+    console.log("Received unexpected response:", response.status);
+    return [];
+  }
+
+  return await response.json() as PullRequest[];
 }
 
 function getGitHubHeaders(token: string) {
@@ -109,6 +126,59 @@ async function createGithubMergeRequest(
   }
 }
 
+async function closeGithubMergeRequest(
+  token: string,
+  owner: string,
+  mergeRequest: MergeRequestEvent,
+) {
+  const repo = getGitHubRepoName(mergeRequest);
+
+  // TODO get pull by match
+  try {
+    // TODO change
+    const body = JSON.stringify({
+      state: "closed",
+    });
+
+    // TODO maybe extract this code
+    // Start
+    const pullRequests = await getGithubPullRequests(
+      token,
+      owner,
+      mergeRequest,
+    );
+
+    // TODO use last commit id instead?
+    // The commits can be obtained by pullRequests[0]?._links?.commits?.href for each pull request
+    const matchingPullRequest = pullRequests.find(
+      (pullRequest: PullRequest) => {
+        return pullRequest.title === mergeRequest.object_attributes.title;
+      },
+    );
+    // End
+
+    if (typeof matchingPullRequest === "undefined") {
+      console.log("No matching pull requests to close found!");
+      return false;
+    }
+
+    console.log("Close URL:", `https://api.github.com/repos/${owner}/${repo}/pulls/${matchingPullRequest.number.toString()}`);
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/pulls/${matchingPullRequest.number.toString()}`,
+      {
+        method: "PATCH",
+        headers: getGitHubHeaders(token),
+        body: body,
+      },
+    );
+    console.debug("Close PR status code:", response.status);
+    return response.status === 200;
+  } catch (e) {
+    console.error("Error by creating all github pull requests:", e);
+    return false;
+  }
+}
+
 function buildGithubPullRequestPayloadByGitlabMergeRequest(
   mergeRequestAttributes: MergeRequestAttributes,
 ): PullRequestDraft {
@@ -119,10 +189,6 @@ function buildGithubPullRequestPayloadByGitlabMergeRequest(
     base: mergeRequestAttributes.target_branch,
     body: mergeRequestAttributes.description,
   };
-}
-
-function addJiraComment() {
-  // TODO implement
 }
 
 async function handleGitlabWebhookRequest(request: Request): Promise<Response> {
@@ -149,6 +215,7 @@ async function handleGithubWebhookRequest(request: Request): Promise<Response> {
       webhookEvent?.action === "completed" &&
       typeof webhookEvent?.workflow_job !== "undefined"
     ) {
+      // TODO add comment to gitlab original MR with feature environment
       await handleGithubWorkflowCompleteEvent(
         webhookEvent as WorkflowJobCompletedEvent,
       );
@@ -181,8 +248,8 @@ async function getWorkflowLogsLink(
       response.status,
     );
     response.headers.forEach((value, key) => {
-      console.log(`Header ${key}:${value}`)
-    })
+      console.log(`Header ${key}:${value}`);
+    });
     return "";
   } catch (e) {
     console.error("Error by getting the logs link:", e);
@@ -194,41 +261,47 @@ async function handleGithubWorkflowCompleteEvent(
   webhookEvent: WorkflowJobCompletedEvent,
 ): Promise<boolean> {
   console.log("Process Gitlab Workflow complete request!");
-  const githubToken = Deno.env.get("GITHUB_TOKEN")
-  const githubOwner = Deno.env.get("GITHUB_OWNER")
+  const githubToken = Deno.env.get("GITHUB_TOKEN");
+  const githubOwner = Deno.env.get("GITHUB_OWNER");
   if (!githubToken || !githubOwner) {
-      console.error("One of the GitHub Environment variables ist missing.")
-      return false
+    console.error("One of the GitHub Environment variables ist missing.");
+    return false;
   }
 
   // TODO test if owner name is set
-  const downloadLogsLink = await getWorkflowLogsLink(githubToken, githubOwner, webhookEvent.repository.name, webhookEvent.workflow_job.run_id)
-  console.log('downloadLogsLink', downloadLogsLink)
+  const downloadLogsLink = await getWorkflowLogsLink(
+    githubToken,
+    githubOwner,
+    webhookEvent.repository.name,
+    webhookEvent.workflow_job.run_id,
+  );
+  console.log("downloadLogsLink", downloadLogsLink);
 
-   /**
+  /**
    * TODOs:
    * -- get the deployment url by the downloaded logs
    * -- write Preview URL + amt-URLs into the JIRA, if not there
    * -- Optional: Write Message in MS Teams
    * -- cleanup logs
    */
-  return true
+  return true;
 }
 
 async function handleGitlabMergeRequestEvent(
   mergeRequestEvent: MergeRequestEvent,
 ): Promise<boolean> {
+  const githubToken = Deno.env.get("GITHUB_TOKEN");
+  const githubOwner = Deno.env.get("GITHUB_OWNER");
+
+  if (!githubToken || !githubOwner) {
+    console.error("One of the GitHub Environment variables ist missing.");
+    return false;
+  }
   if (
     !mergeRequestEvent.object_attributes?.draft &&
     mergeRequestEvent.object_attributes?.state === "opened"
   ) {
     console.log("Process Gitlab Merge request!");
-    const githubToken = Deno.env.get("GITHUB_TOKEN")
-    const githubOwner = Deno.env.get("GITHUB_OWNER")
-    if (!githubToken || !githubOwner) {
-      console.error("One of the GitHub Environment variables ist missing.")
-      return false;
-    }
 
     const pullRequestExists = await checkIfGithubPullRequestExists(
       githubToken,
@@ -258,7 +331,9 @@ async function handleGitlabMergeRequestEvent(
     console.log("Ignore merge request because it is in draft!");
   } else if (mergeRequestEvent.object_attributes?.state === "closed") {
     // TODO close github MR
-    console.log("Merge request is closed!!");
+    console.log("Merge request is closed. Closing pull request in github...");
+    await closeGithubMergeRequest(githubToken, githubOwner, mergeRequestEvent);
+    // TODO handle return value
   }
   return true;
 }

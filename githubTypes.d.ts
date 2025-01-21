@@ -1,6 +1,9 @@
 // TODO add other fields
 export interface PullRequest {
     title: string;
+    description: string;
+    number: number;
+    state: string;
 }
 
 export interface PullRequestDraft {
@@ -12,5 +15,3 @@ export interface PullRequestDraft {
     maintainer_can_modify?: boolean;
     issue?: number;
 }
-
-export
